@@ -3,33 +3,40 @@
 declare(strict_types=1);
 
 use Facebook\WebDriver\WebDriverDimension;
-use SpomkyLabs\PwaBundle\CachingStrategy\HasCacheStrategies;
+use SpomkyLabs\PwaBundle\CachingStrategy\HasCacheStrategiesInterface;
+use SpomkyLabs\PwaBundle\CachingStrategy\PreloadUrlsGeneratorManager;
+use SpomkyLabs\PwaBundle\CachingStrategy\PreloadUrlsTagGenerator;
 use SpomkyLabs\PwaBundle\Command\CreateIconsCommand;
 use SpomkyLabs\PwaBundle\Command\CreateScreenshotCommand;
 use SpomkyLabs\PwaBundle\Command\ListCacheStrategiesCommand;
+use SpomkyLabs\PwaBundle\DataCollector\PwaCollector;
 use SpomkyLabs\PwaBundle\Dto\Manifest;
 use SpomkyLabs\PwaBundle\Dto\ServiceWorker;
+use SpomkyLabs\PwaBundle\EventSubscriber\ScreenshotSubscriber;
 use SpomkyLabs\PwaBundle\ImageProcessor\GDImageProcessor;
 use SpomkyLabs\PwaBundle\ImageProcessor\ImagickImageProcessor;
-use SpomkyLabs\PwaBundle\MatchCallbackHandler\MatchCallbackHandler;
+use SpomkyLabs\PwaBundle\MatchCallbackHandler\MatchCallbackHandlerInterface;
 use SpomkyLabs\PwaBundle\Service\ManifestBuilder;
 use SpomkyLabs\PwaBundle\Service\ServiceWorkerBuilder;
 use SpomkyLabs\PwaBundle\Service\ServiceWorkerCompiler;
-use SpomkyLabs\PwaBundle\ServiceWorkerRule\ServiceWorkerRule;
+use SpomkyLabs\PwaBundle\ServiceWorkerRule\ServiceWorkerRuleInterface;
 use SpomkyLabs\PwaBundle\Subscriber\ManifestCompileEventListener;
 use SpomkyLabs\PwaBundle\Subscriber\PwaDevServerSubscriber;
 use SpomkyLabs\PwaBundle\Subscriber\ServiceWorkerCompileEventListener;
 use SpomkyLabs\PwaBundle\Subscriber\WorkboxCompileEventListener;
+use SpomkyLabs\PwaBundle\Twig\InstanceOfExtension;
 use SpomkyLabs\PwaBundle\Twig\PwaExtension;
 use SpomkyLabs\PwaBundle\Twig\PwaRuntime;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\Mime\MimeTypes;
 use Symfony\Component\Panther\Client;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\abstract_arg;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-return static function (ContainerConfigurator $container): void {
-    $container = $container->services()
+return static function (ContainerConfigurator $configurator): void {
+    $container = $configurator->services()
         ->defaults()
         ->private()
         ->autoconfigure()
@@ -110,18 +117,41 @@ return static function (ContainerConfigurator $container): void {
     ;
 
     /*** Service Worker Compiler Rules ***/
-    $container->instanceof(ServiceWorkerRule::class)
+    $container->instanceof(ServiceWorkerRuleInterface::class)
         ->tag('spomky_labs_pwa.service_worker_rule')
     ;
     $container->load('SpomkyLabs\\PwaBundle\\ServiceWorkerRule\\', '../../ServiceWorkerRule/*');
 
-    $container->instanceof(HasCacheStrategies::class)
+    $container->instanceof(HasCacheStrategiesInterface::class)
         ->tag('spomky_labs_pwa.cache_strategy')
     ;
     $container->load('SpomkyLabs\\PwaBundle\\CachingStrategy\\', '../../CachingStrategy/*');
 
-    $container->instanceof(MatchCallbackHandler::class)
+    $container->instanceof(MatchCallbackHandlerInterface::class)
         ->tag('spomky_labs_pwa.match_callback_handler')
     ;
     $container->load('SpomkyLabs\\PwaBundle\\MatchCallbackHandler\\', '../../MatchCallbackHandler/*');
+
+    $container->set(PreloadUrlsGeneratorManager::class);
+    $container->instanceof(UrlGeneratorInterface::class)
+        ->tag('spomky_labs_pwa.preload_urls_generator')
+    ;
+    $container->set(PreloadUrlsTagGenerator::class)
+        ->abstract()
+        ->args([
+            '$alias' => abstract_arg('alias'),
+            '$urls' => abstract_arg('urls'),
+        ])
+    ;
+    $container->set(ScreenshotSubscriber::class);
+
+    if ($configurator->env() !== 'prod') {
+        $container->set(PwaCollector::class)
+            ->tag('data_collector', [
+                'template' => '@SpomkyLabsPwa/Collector/template.html.twig',
+                'id' => 'pwa',
+            ])
+        ;
+        $container->set(InstanceOfExtension::class);
+    }
 };

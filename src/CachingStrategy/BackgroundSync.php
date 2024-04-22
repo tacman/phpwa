@@ -6,16 +6,16 @@ namespace SpomkyLabs\PwaBundle\CachingStrategy;
 
 use SpomkyLabs\PwaBundle\Dto\ServiceWorker;
 use SpomkyLabs\PwaBundle\Dto\Workbox;
-use SpomkyLabs\PwaBundle\MatchCallbackHandler\MatchCallbackHandler;
+use SpomkyLabs\PwaBundle\MatchCallbackHandler\MatchCallbackHandlerInterface;
 use SpomkyLabs\PwaBundle\WorkboxPlugin\BackgroundSyncPlugin;
 use Symfony\Component\DependencyInjection\Attribute\TaggedIterator;
 
-final readonly class BackgroundSync implements HasCacheStrategies
+final readonly class BackgroundSync implements HasCacheStrategiesInterface
 {
     private Workbox $workbox;
 
     /**
-     * @param iterable<MatchCallbackHandler> $matchCallbackHandlers
+     * @param iterable<MatchCallbackHandlerInterface> $matchCallbackHandlers
      */
     public function __construct(
         ServiceWorker $serviceWorker,
@@ -26,28 +26,28 @@ final readonly class BackgroundSync implements HasCacheStrategies
     }
 
     /**
-     * @return array<CacheStrategy>
+     * @return array<CacheStrategyInterface>
      */
     public function getCacheStrategies(): array
     {
         $strategies = [];
         foreach ($this->workbox->backgroundSync as $sync) {
             $strategies[] = WorkboxCacheStrategy::create(
-                'BackgroundSync API',
-                CacheStrategy::STRATEGY_NETWORK_ONLY,
-                $this->prepareMatchCallback($sync->matchCallback),
                 $this->workbox->enabled,
                 true,
-                null,
-                [
+                CacheStrategyInterface::STRATEGY_NETWORK_ONLY,
+                $this->prepareMatchCallback($sync->matchCallback)
+            )
+                ->withName('Background Sync')
+                ->withPlugin(
                     BackgroundSyncPlugin::create(
                         $sync->queueName,
                         $sync->maxRetentionTime,
                         $sync->forceSyncFallback,
                         $sync->broadcastChannel
                     ),
-                ]
-            );
+                )
+                ->withMethod($sync->method);
         }
 
         return $strategies;

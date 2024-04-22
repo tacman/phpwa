@@ -11,6 +11,9 @@ final class Manifest
 {
     use TranslatableTrait;
 
+    #[SerializedName('use_credentials')]
+    public bool $useCredentials = true;
+
     #[SerializedName('background_color')]
     public null|string $backgroundColor = null;
 
@@ -95,6 +98,9 @@ final class Manifest
      */
     #[SerializedName('related_applications')]
     public array $relatedApplications = [];
+
+    #[SerializedName('prefer_related_applications')]
+    public bool $preferRelatedApplications = false;
 
     /**
      * @var array<Shortcut>

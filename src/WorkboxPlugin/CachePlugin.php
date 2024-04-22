@@ -4,16 +4,9 @@ declare(strict_types=1);
 
 namespace SpomkyLabs\PwaBundle\WorkboxPlugin;
 
-abstract readonly class CachePlugin
+/**
+ * @deprecated since 1.2.0, to be removed in 2.0.0. Use CachePluginInterface instead.
+ */
+interface CachePlugin extends CachePluginInterface
 {
-    /**
-     * @param array<string, mixed> $options
-     */
-    public function __construct(
-        public string $name,
-        public array $options = []
-    ) {
-    }
-
-    abstract public function render(int $jsonOptions = 0): string;
 }

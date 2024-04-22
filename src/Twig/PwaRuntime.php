@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use SpomkyLabs\PwaBundle\Dto\Icon;
 use SpomkyLabs\PwaBundle\Dto\Manifest;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
-use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
 use Symfony\Component\AssetMapper\MappedAsset;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Mime\MimeTypes;
@@ -25,8 +24,6 @@ final readonly class PwaRuntime
         private bool $manifestEnabled,
         #[Autowire('%spomky_labs_pwa.sw.enabled%')]
         private bool $serviceWorkerEnabled,
-        #[Autowire('@asset_mapper.importmap.config_reader')]
-        private ImportMapConfigReader $importMapConfigReader,
         private AssetMapperInterface $assetMapper,
         private Manifest $manifest,
         #[Autowire('%spomky_labs_pwa.manifest.public_url%')]
@@ -59,8 +56,12 @@ final readonly class PwaRuntime
     private function injectManifestFile(string $output): string
     {
         $url = $this->assetMapper->getPublicPath($this->manifestPublicUrl) ?? $this->manifestPublicUrl;
+        $useCredentials = '';
+        if ($this->manifest->useCredentials === true) {
+            $useCredentials = ' crossorigin="use-credentials"';
+        }
 
-        return $output . sprintf('%s<link rel="manifest" href="%s">', PHP_EOL, $url);
+        return $output . sprintf('%s<link rel="manifest"%s href="%s">', PHP_EOL, $useCredentials, $url);
     }
 
     private function injectThemeColor(string $output, bool $themeColor): string
@@ -94,8 +95,7 @@ final readonly class PwaRuntime
             $registerOptions = sprintf(', {%s}', mb_substr($registerOptions, 2));
         }
         if ($serviceWorker->workbox->enabled === true) {
-            $hasWorkboxWindow = $this->importMapConfigReader->findRootImportMapEntry('workbox-window') !== null;
-            $workboxUrl = $hasWorkboxWindow ? 'workbox-window' : 'https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-window.prod.mjs';
+            $workboxUrl = sprintf('%s%s', $serviceWorker->workbox->workboxPublicUrl, '/workbox-window.prod.mjs');
             $declaration = <<<SERVICE_WORKER
 <script type="module" {$scriptAttributes}>
   import {Workbox} from '{$workboxUrl}';

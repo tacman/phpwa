@@ -8,7 +8,7 @@ use SpomkyLabs\PwaBundle\Dto\ServiceWorker;
 use SpomkyLabs\PwaBundle\Dto\Workbox;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-final readonly class ManifestCache implements HasCacheStrategies
+final readonly class ManifestCache implements HasCacheStrategiesInterface
 {
     private string $manifestPublicUrl;
 
@@ -27,12 +27,12 @@ final readonly class ManifestCache implements HasCacheStrategies
     {
         return [
             WorkboxCacheStrategy::create(
-                'manifest',
-                CacheStrategy::STRATEGY_STALE_WHILE_REVALIDATE,
-                sprintf("({url}) => '%s' === url.pathname", $this->manifestPublicUrl),
                 $this->workbox->enabled && $this->workbox->cacheManifest,
-                true
-            ),
+                true,
+                CacheStrategyInterface::STRATEGY_STALE_WHILE_REVALIDATE,
+                sprintf("({url}) => '%s' === url.pathname", $this->manifestPublicUrl),
+            )
+                ->withName('manifest'),
         ];
     }
 }
