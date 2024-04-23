@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SpomkyLabs\PwaBundle\Subscriber;
 
+use Psr\EventDispatcher\EventDispatcherInterface;
 use SpomkyLabs\PwaBundle\Dto\Manifest;
+use SpomkyLabs\PwaBundle\Event\NullEventDispatcher;
+use SpomkyLabs\PwaBundle\Event\PostManifestCompileEvent;
+use SpomkyLabs\PwaBundle\Event\PreManifestCompileEvent;
 use Symfony\Component\AssetMapper\Event\PreAssetsCompileEvent;
 use Symfony\Component\AssetMapper\Path\PublicAssetsFilesystemInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -21,6 +25,8 @@ use const JSON_UNESCAPED_UNICODE;
 #[AsEventListener(PreAssetsCompileEvent::class)]
 final readonly class ManifestCompileEventListener
 {
+    private EventDispatcherInterface $dispatcher;
+
     private string $manifestPublicUrl;
 
     private array $jsonOptions;
@@ -28,15 +34,15 @@ final readonly class ManifestCompileEventListener
     public function __construct(
         private SerializerInterface $serializer,
         private Manifest $manifest,
-        #[Autowire('%spomky_labs_pwa.manifest.enabled%')]
-        private bool $manifestEnabled,
         #[Autowire('%spomky_labs_pwa.manifest.public_url%')]
         string $manifestPublicUrl,
         #[Autowire('@asset_mapper.local_public_assets_filesystem')]
         private PublicAssetsFilesystemInterface $assetsFilesystem,
         #[Autowire('%kernel.debug%')]
         bool $debug,
+        null|EventDispatcherInterface $dispatcher = null,
     ) {
+        $this->dispatcher = $dispatcher ?? new NullEventDispatcher();
         $this->manifestPublicUrl = '/' . trim($manifestPublicUrl, '/');
         $options = [
             AbstractObjectNormalizer::SKIP_UNINITIALIZED_VALUES => true,
@@ -52,10 +58,14 @@ final readonly class ManifestCompileEventListener
 
     public function __invoke(PreAssetsCompileEvent $event): void
     {
-        if (! $this->manifestEnabled) {
+        if (! $this->manifest->enabled) {
             return;
         }
-        $data = $this->serializer->serialize($this->manifest, 'json', $this->jsonOptions);
-        $this->assetsFilesystem->write($this->manifestPublicUrl, $data);
+        $manifest = clone $this->manifest;
+        $this->dispatcher->dispatch(new PreManifestCompileEvent($manifest));
+        $data = $this->serializer->serialize($manifest, 'json', $this->jsonOptions);
+        $postEvent = new PostManifestCompileEvent($manifest, $data);
+        $this->dispatcher->dispatch($postEvent);
+        $this->assetsFilesystem->write($this->manifestPublicUrl, $postEvent->data);
     }
 }
